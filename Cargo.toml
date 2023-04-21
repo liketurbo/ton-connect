@@ -1,0 +1,18 @@
+[package]
+name = "tonconnect"
+version = "0.1.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+x25519-dalek = "1"
+chacha20poly1305 = "0.10.1"
+rand = "0.7"
+hex = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+percent-encoding = "2.2.0"
+
+[[example]]
+name = "tonconnect"
+path = "examples/tonconnect.rs"
