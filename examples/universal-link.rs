@@ -1,10 +1,10 @@
-extern crate tonconnect;
+extern crate ton_connect;
 
-use tonconnect::{ConnectItem, InitRequest, TonAddressItem, Tonconnect};
+use ton_connect::{ConnectItem, ConnectRequest, TonAddressItem, Tonconnect};
 
 fn main() {
     let tonconnect = Tonconnect::new();
-    let init_request = InitRequest::new(
+    let init_request = ConnectRequest::new(
         "https://raw.githubusercontent.com/XaBbl4/pytonconnect/main/pytonconnect-manifest.json"
             .to_string(),
         vec![ConnectItem::TonAddress(TonAddressItem::new())],

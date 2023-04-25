@@ -1,5 +1,5 @@
 [package]
-name = "tonconnect"
+name = "ton_connect"
 version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -12,7 +12,12 @@ hex = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 percent-encoding = "2.2.0"
+reqwest = { version = "0.11", features = ["blocking"] }
 
 [[example]]
-name = "tonconnect"
-path = "examples/tonconnect.rs"
+name = "universal-link"
+path = "examples/universal-link.rs"
+
+[[example]]
+name = "ton-connect-bridge"
+path = "examples/ton-connect-bridge.rs"
