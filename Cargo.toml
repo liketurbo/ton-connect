@@ -13,6 +13,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 percent-encoding = "2.2.0"
 reqwest = { version = "0.11", features = ["blocking"] }
+mime = "0.3.17"
 
 [[example]]
 name = "universal-link"
