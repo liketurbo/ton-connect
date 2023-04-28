@@ -1,6 +1,6 @@
-use chacha20poly1305;
+use crate::types::{BridgeMessage, WalletEvent};
 use crypto_box::{
-    aead::{Aead, AeadCore, OsRng},
+    aead::{Aead, OsRng},
     PublicKey, SalsaBox, SecretKey,
 };
 use generic_array::{typenum::U24, GenericArray};
@@ -27,10 +27,14 @@ impl ClientKeypair {
 
     pub fn decrypt_message(
         &self,
-        payload: &[u8],
-        sender_pubkey: &[u8],
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let sender_pubkey: [u8; 32] = sender_pubkey.try_into()?;
+        bridge_msg: BridgeMessage,
+    ) -> Result<WalletEvent, Box<dyn std::error::Error>> {
+        let payload =
+            base64::decode(&bridge_msg.message).expect("invalid base64 message from bridge");
+        let sender_pubkey = hex::decode(&bridge_msg.from).expect("invalid hex sender pubkey");
+        let sender_pubkey: [u8; 32] = sender_pubkey
+            .try_into()
+            .map_err(|_| "invalid sender pubkey length")?;
         let sender_pubkey = PublicKey::from(sender_pubkey);
         let my_box: SalsaBox = self.get_box(&sender_pubkey);
         let nonce: &[u8; NONCE_LENGTH] = &payload[..NONCE_LENGTH].try_into().unwrap();
@@ -39,6 +43,8 @@ impl ClientKeypair {
         let plaintext = my_box
             .decrypt(&nonce, ciphertext)
             .map_err(|_| "decryption failed")?;
-        Ok(())
+        let plaintext = String::from_utf8(plaintext)?;
+        let wallet_event: WalletEvent = serde_json::from_str(&plaintext)?;
+        Ok(wallet_event)
     }
 }
