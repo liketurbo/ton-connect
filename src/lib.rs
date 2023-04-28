@@ -1,5 +1,6 @@
 extern crate chacha20poly1305;
 extern crate crypto_box;
+extern crate generic_array;
 extern crate hex;
 extern crate mime;
 extern crate percent_encoding;
@@ -8,47 +9,18 @@ extern crate reqwest;
 extern crate serde;
 extern crate serde_json;
 
-use crypto_box::{
-    aead::{Aead, AeadCore, OsRng},
-    PublicKey, SalsaBox, SecretKey,
-};
-use percent_encoding::{utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
+use crypto_box::PublicKey;
+use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use reqwest::{
-    blocking::{Request, Response},
     header::{HeaderMap, HeaderValue, CONTENT_TYPE},
     Url,
 };
-use serde::{Deserialize, Serialize};
-use std::{
-    io::{BufRead, BufReader, Read},
-    net::{TcpStream, ToSocketAddrs},
-};
+use std::io::{BufRead, BufReader};
 
+pub mod crypto;
 pub mod types;
-pub use types::{BridgeMessage, TonAddressItem, TonProofItem};
 
-#[derive(Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum ConnectItem {
-    TonAddress(TonAddressItem),
-    TonProof(TonProofItem),
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct ConnectRequest {
-    #[serde(rename = "manifestUrl")]
-    pub manifest_url: String,
-    pub items: Vec<ConnectItem>,
-}
-
-impl ConnectRequest {
-    pub fn new(manifest_url: String, items: Vec<ConnectItem>) -> Self {
-        Self {
-            manifest_url,
-            items,
-        }
-    }
-}
+use types::{BridgeMessage, ConnectRequest};
 
 pub struct TonConnect {
     universal_url: String,
@@ -62,34 +34,16 @@ impl TonConnect {
     pub fn create_connect_link(
         &self,
         client_id: &PublicKey,
-        connect_request: ConnectRequest,
-    ) -> Result<String, ()> {
+        connect_request: &ConnectRequest,
+    ) -> Result<String, Box<dyn std::error::Error>> {
         let hex_public = hex::encode(client_id.as_bytes());
-        let init_request = serde_json::to_string(&connect_request).unwrap();
+        let init_request = serde_json::to_string(&connect_request)?;
         let init_request = utf8_percent_encode(&init_request, NON_ALPHANUMERIC);
         let link = format!(
             "{}?v=2&id={}&r={}",
             self.universal_url, hex_public, init_request
         );
         Ok(link)
-    }
-}
-
-pub struct ClientKeypair {
-    pub public: PublicKey,
-    secret: SecretKey,
-}
-
-impl ClientKeypair {
-    pub fn random() -> Self {
-        let secret = SecretKey::generate(&mut OsRng);
-        let public = secret.public_key();
-
-        Self { secret, public }
-    }
-
-    pub fn get_box(&self, public: &PublicKey) -> SalsaBox {
-        SalsaBox::new(public, &self.secret)
     }
 }
 

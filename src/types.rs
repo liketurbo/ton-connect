@@ -1,46 +1,30 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
-pub struct TonAddressItem {
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ConnectRequest {
+    #[serde(rename = "manifestUrl")]
+    pub manifest_url: String,
+    pub items: Vec<ConnectItem>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "name")]
+pub enum ConnectItem {
+    #[serde(rename = "ton_addr")]
+    TonAddressItem,
+    #[serde(rename = "ton_proof")]
+    TonProofItem { payload: String },
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct TonAddressItem {
     name: String,
 }
 
-impl Default for TonAddressItem {
-    fn default() -> Self {
-        Self {
-            name: "ton_addr".to_string(),
-        }
-    }
-}
-
-impl TonAddressItem {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct TonProofItem {
+#[derive(Debug, Serialize, Deserialize)]
+struct TonProofItem {
     name: String,
     payload: String,
-}
-
-impl Default for TonProofItem {
-    fn default() -> Self {
-        Self {
-            name: "ton_proof".to_string(),
-            payload: "".to_string(),
-        }
-    }
-}
-
-impl TonProofItem {
-    pub fn new(payload: String) -> Self {
-        Self {
-            name: "ton_proof".to_string(),
-            payload,
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
