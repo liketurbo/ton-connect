@@ -1,4 +1,5 @@
 extern crate chacha20poly1305;
+extern crate crypto_box;
 extern crate hex;
 extern crate mime;
 extern crate percent_encoding;
@@ -6,14 +7,12 @@ extern crate rand;
 extern crate reqwest;
 extern crate serde;
 extern crate serde_json;
-extern crate x25519_dalek;
 
-use chacha20poly1305::{
-    aead::{Aead, AeadCore, KeyInit},
-    ChaCha20Poly1305, Nonce, XChaCha20Poly1305,
+use crypto_box::{
+    aead::{Aead, AeadCore, OsRng},
+    PublicKey, SalsaBox, SecretKey,
 };
 use percent_encoding::{utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
-use rand::rngs::OsRng;
 use reqwest::{
     blocking::{Request, Response},
     header::{HeaderMap, HeaderValue, CONTENT_TYPE},
@@ -24,11 +23,9 @@ use std::{
     io::{BufRead, BufReader, Read},
     net::{TcpStream, ToSocketAddrs},
 };
-use types::{DeviceInfo, WalletInfo};
-use x25519_dalek::{EphemeralSecret, PublicKey};
 
 pub mod types;
-pub use types::{TonAddressItem, TonProofItem};
+pub use types::{BridgeMessage, TonAddressItem, TonProofItem};
 
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
@@ -64,7 +61,7 @@ impl TonConnect {
 
     pub fn create_connect_link(
         &self,
-        client_id: PublicKey,
+        client_id: &PublicKey,
         connect_request: ConnectRequest,
     ) -> Result<String, ()> {
         let hex_public = hex::encode(client_id.as_bytes());
@@ -78,26 +75,21 @@ impl TonConnect {
     }
 }
 
-struct TonConnectWallet {
-    name: String,
-    image: String,
-    tondns: Option<String>,
-    about_url: String,
-    universal_url: String,
-    sse_bridge_url: String,
-}
-
 pub struct ClientKeypair {
     pub public: PublicKey,
-    secret: EphemeralSecret,
+    secret: SecretKey,
 }
 
 impl ClientKeypair {
     pub fn random() -> Self {
-        let secret = EphemeralSecret::new(OsRng);
-        let public = PublicKey::from(&secret);
+        let secret = SecretKey::generate(&mut OsRng);
+        let public = secret.public_key();
 
         Self { secret, public }
+    }
+
+    pub fn get_box(&self, public: &PublicKey) -> SalsaBox {
+        SalsaBox::new(public, &self.secret)
     }
 }
 
@@ -139,9 +131,9 @@ impl HttpBridge {
 
     pub fn subscribe(
         &mut self,
-        client_ids: &Vec<PublicKey>,
-        topics: Option<Vec<Topic>>,
-        handler: impl Fn(Result<Event, Box<dyn std::error::Error>>) -> (),
+        client_ids: &Vec<&PublicKey>,
+        topics: &Option<Vec<Topic>>,
+        handler: impl Fn(BridgeMessage) -> (),
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut headers: HeaderMap<HeaderValue> = HeaderMap::with_capacity(2);
         headers.insert("Accept", "text/event-stream".parse()?);
@@ -169,9 +161,8 @@ impl HttpBridge {
             url.query_pairs_mut().append_pair("client_id", &values);
         }
 
-        if topics.is_some() {
+        if let Some(topics) = topics.as_ref() {
             let values = topics
-                .expect("checked above")
                 .iter()
                 .map(|topic| match topic {
                     Topic::SendTransaction => "sendTransaction",
@@ -210,15 +201,14 @@ impl HttpBridge {
         // \r\n\
         // body: heartbeat
         // ... and maybe an event
+        // we are assuming that the first line is always \r\n\
         let mut ignore_next_blank = true;
         loop {
             line.clear();
-            // TODO: pass error to handler
             stream.read_line(&mut line)?;
 
             if line.is_empty() {
-                handler(Err("unexpected end of stream".into()));
-                break;
+                return Err("unexpected end of stream".into());
             }
 
             let line = line.trim_end_matches(|c| c == '\r' || c == '\n');
@@ -226,15 +216,14 @@ impl HttpBridge {
             if line == "body: heartbeat" {
                 ignore_next_blank = true;
                 continue;
-            }
-
-            if ignore_next_blank {
+            } else if ignore_next_blank {
                 ignore_next_blank = false;
                 continue;
             }
 
             if line.is_empty() {
-                handler(Ok(event));
+                let bridge_msg: BridgeMessage = serde_json::from_str(&event.data).unwrap();
+                handler(bridge_msg);
                 event = Event::default();
                 continue;
             }
@@ -257,14 +246,11 @@ impl HttpBridge {
                     event.kind = Some(value.to_string());
                 }
                 "data" => {
-                    event.data.push_str(value);
-                    event.data.push('\n');
+                    event.data = value.to_string();
                 }
                 _ => {}
             }
         }
-
-        Ok(())
     }
 
     /*
