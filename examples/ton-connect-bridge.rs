@@ -1,13 +1,8 @@
-extern crate base64;
-extern crate crypto_box;
-extern crate generic_array;
-extern crate salsa20;
-extern crate serde_json;
 extern crate ton_connect;
 
 use ton_connect::{
     crypto::ClientKeypair,
-    types::{BridgeMessage, ConnectItem, ConnectRequest},
+    types::{BridgeMessage, ConnectItem, ConnectRequest, Topic},
     HttpBridge, TonConnect,
 };
 
@@ -29,11 +24,9 @@ fn main() {
 
     let mut bridge = HttpBridge::new("https://bridge.tonapi.io/bridge");
     let client_ids = vec![&client_a_pub];
-    let topics = None;
-    let res = bridge.subscribe(&client_ids, &topics, |bridge_msg: BridgeMessage| {
+    let topics = Some(vec![Topic::SendTransaction]);
+    let _ = bridge.listen(&client_ids, &topics, |bridge_msg: BridgeMessage| {
         let res = client_a.decrypt_message(bridge_msg).unwrap();
         println!("{:?}", res);
     });
-
-    println!("{:?}", res);
 }

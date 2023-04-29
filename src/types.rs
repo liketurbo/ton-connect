@@ -27,6 +27,14 @@ struct TonProofItem {
     payload: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub enum Topic {
+    #[serde(rename = "sendTransaction")]
+    SendTransaction,
+    #[serde(rename = "signData")]
+    SignData,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BridgeMessage {
     pub from: String,

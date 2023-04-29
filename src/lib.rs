@@ -1,10 +1,8 @@
-extern crate chacha20poly1305;
 extern crate crypto_box;
 extern crate generic_array;
 extern crate hex;
 extern crate mime;
 extern crate percent_encoding;
-extern crate rand;
 extern crate reqwest;
 extern crate serde;
 extern crate serde_json;
@@ -20,7 +18,7 @@ use std::io::{BufRead, BufReader};
 pub mod crypto;
 pub mod types;
 
-use types::{BridgeMessage, ConnectRequest};
+use types::{BridgeMessage, ConnectRequest, Topic};
 
 pub struct TonConnect {
     universal_url: String,
@@ -47,18 +45,7 @@ impl TonConnect {
     }
 }
 
-pub enum Topic {
-    SendTransaction,
-    SignData,
-}
-
 pub struct HttpBridge {
-    /*
-    device_info: DeviceInfo,         // Can be possible multiple sessions
-    wallet_info: Option<WalletInfo>, // Also can be multiple wallets
-    protocol_version: u32,           // Exclude cause i'm only planning to use version 2
-    is_wallet_browser: bool,         // Probably this is not needed too
-    */
     url: Url,
     client: reqwest::blocking::Client,
     last_event_id: Option<String>,
@@ -83,7 +70,7 @@ impl HttpBridge {
         }
     }
 
-    pub fn subscribe(
+    pub fn listen(
         &mut self,
         client_ids: &Vec<&PublicKey>,
         topics: &Option<Vec<Topic>>,
@@ -118,11 +105,9 @@ impl HttpBridge {
         if let Some(topics) = topics.as_ref() {
             let values = topics
                 .iter()
-                .map(|topic| match topic {
-                    Topic::SendTransaction => "sendTransaction",
-                    Topic::SignData => "signData",
-                })
-                .collect::<Vec<&str>>()
+                .map(|topic| serde_json::to_string(topic).expect("cannot serialize topic"))
+                .map(|topic| topic.trim_matches('"').to_string())
+                .collect::<Vec<String>>()
                 .join(",");
 
             url.query_pairs_mut().append_pair("topic", &values);
@@ -184,7 +169,7 @@ impl HttpBridge {
 
             let (field, value) = if let Some(pos) = line.find(':') {
                 let (f, v) = line.split_at(pos);
-                // Strip : and an optional space.
+                // Strip ":" and space
                 let v = &v[1..];
                 let v = if v.starts_with(' ') { &v[1..] } else { v };
                 (f, v)
@@ -207,9 +192,7 @@ impl HttpBridge {
         }
     }
 
-    /*
-    pub fn restore_connection() {}
-    pub fn send() {}
-    pub fn listen() {}
-    */
+    pub fn send_transaction() {
+        unimplemented!()
+    }
 }
