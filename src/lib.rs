@@ -1,5 +1,5 @@
+pub extern crate base64;
 extern crate crypto_box;
-extern crate generic_array;
 extern crate hex;
 extern crate mime;
 extern crate percent_encoding;

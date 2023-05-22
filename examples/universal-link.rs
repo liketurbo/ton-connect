@@ -21,7 +21,7 @@ fn main() {
         ],
     };
 
-    let client_a = ClientKeypair::random();
+    let client_a = ClientKeypair::generate_random_keypair();
     let universal_link = tonconnect
         .create_connect_link(&client_a.public, &init_request)
         .unwrap();
