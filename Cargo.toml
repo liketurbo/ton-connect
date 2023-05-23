@@ -16,13 +16,5 @@ base64 = "0.21.0"
 crypto_box = "0.8.2"
 
 [[example]]
-name = "universal-link"
-path = "examples/universal-link.rs"
-
-[[example]]
 name = "ton-connect-bridge"
 path = "examples/ton-connect-bridge.rs"
-
-[[example]]
-name = "custom-serde"
-path = "examples/custom-serde.rs"

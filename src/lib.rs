@@ -8,7 +8,6 @@ extern crate serde;
 extern crate serde_json;
 
 use crypto_box::PublicKey;
-use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use reqwest::{
     header::{HeaderMap, HeaderValue, CONTENT_TYPE},
     Url,
@@ -16,34 +15,10 @@ use reqwest::{
 use std::io::{BufRead, BufReader};
 
 pub mod crypto;
+pub mod link;
 pub mod types;
 
 use types::{BridgeMessage, ConnectRequest, Topic};
-
-pub struct TonConnect {
-    universal_url: String,
-}
-
-impl TonConnect {
-    pub fn new(universal_url: String) -> Self {
-        Self { universal_url }
-    }
-
-    pub fn create_connect_link(
-        &self,
-        client_id: &PublicKey,
-        connect_request: &ConnectRequest,
-    ) -> Result<String, Box<dyn std::error::Error>> {
-        let hex_public = hex::encode(client_id.as_bytes());
-        let init_request = serde_json::to_string(&connect_request)?;
-        let init_request = utf8_percent_encode(&init_request, NON_ALPHANUMERIC);
-        let link = format!(
-            "{}?v=2&id={}&r={}",
-            self.universal_url, hex_public, init_request
-        );
-        Ok(link)
-    }
-}
 
 pub struct HttpBridge {
     url: Url,
