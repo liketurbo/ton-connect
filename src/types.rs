@@ -1,9 +1,29 @@
 use serde::{ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
 
+/// App needs to have its manifest to pass meta information to the wallet.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AppManifest {
+    /// App URL. Will be used as the dapp identifier. Will be used to open the dapp after click to its icon in the wallet. It is recommended to pass url without closing slash, e.g. 'https://mydapp.com' instead of 'https://mydapp.com/'.
+    pub url: String,
+    /// App name. Might be simple, will not be used as identifier.
+    pub name: String,
+    /// Url to the app icon. Must be PNG, ICO, ... format. SVG icons are not supported. Perfectly pass url to a 180x180px PNG icon.
+    #[serde(rename = "iconUrl")]
+    pub icon_url: String,
+    /// Url to the Terms Of Use document. Optional for usual apps, but required for the apps which is placed in the Tonkeeper recommended apps list.
+    #[serde(rename = "termsOfUseUrl")]
+    pub terms_of_use_url: Option<String>,
+    /// Url to the Privacy Policy document. Optional for usual apps, but required for the apps which is placed in the Tonkeeper recommended apps list.
+    #[serde(rename = "privacyPolicyUrl")]
+    pub privacy_policy_url: Option<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ConnectRequest {
+    /// Link to the app's tonconnect-manifest.json
     #[serde(rename = "manifestUrl")]
     pub manifest_url: String,
+    /// Data items to share with the app.
     pub items: Vec<ConnectItem>,
 }
 
@@ -12,19 +32,20 @@ pub struct ConnectRequest {
 pub enum ConnectItem {
     #[serde(rename = "ton_addr")]
     TonAddressItem,
+    /// Arbitrary payload, e.g. nonce + expiration timestamp.
     #[serde(rename = "ton_proof")]
     TonProofItem { payload: String },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 struct TonAddressItem {
-    name: String,
+    pub name: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 struct TonProofItem {
-    name: String,
-    payload: String,
+    pub name: String,
+    pub payload: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -41,50 +62,78 @@ pub struct BridgeMessage {
     pub message: String,
 }
 
+/// Wallet responds with ConnectEvent message if the user approves the request.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "event")]
 pub enum WalletEvent {
     #[serde(rename = "connect")]
-    Connect { id: u32, payload: ConnectPayload },
+    Connect {
+        /// Increasing event counter.
+        id: u32,
+        payload: ConnectPayload,
+    },
     #[serde(rename = "connect_error")]
     ConnectError {
+        /// Increasing event counter.
         id: u32,
         payload: ConnectErrorPayload,
     },
     #[serde(rename = "disconnect")]
-    Disconnect { id: u32 },
+    Disconnect {
+        /// Increasing event counter.
+        id: u32,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ConnectPayload {
-    items: Vec<ConnectItemReply>,
-    device: DeviceInfo,
+    pub items: Vec<ConnectItemReply>,
+    pub device: DeviceInfo,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ConnectErrorPayload {
-    code: u32,
-    message: String,
+    /// | Code | Description                   |
+    /// |------|-------------------------------|
+    /// | 0    | Unknown error                 |
+    /// | 1    | Bad request                   |
+    /// | 2    | App manifest not found        |
+    /// | 3    | App manifest content error    |
+    /// | 100  | Unknown app                   |
+    /// | 300  | User declined the connection  |
+    pub code: u32,
+    pub message: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "name")]
-enum ConnectItemReply {
+pub enum ConnectItemReply {
+    /// Untrusted data returned by the wallet.
+    /// If you need a guarantee that the user owns this address and public key, you need to additionally request a ton_proof.
     #[serde(rename = "ton_addr")]
     TonAddress {
+        /// TON address raw (`0:<hex>`).
         address: String,
+        /// Network `global_id`.
         network: NETWORK,
+        /// HEX string without 0x.
         #[serde(rename = "publicKey")]
         public_key: String,
+        /// Base64 (not url safe) encoded stateinit cell for the wallet contract.
         #[serde(rename = "walletStateInit")]
         wallet_state_init: String,
     },
     #[serde(rename = "ton_proof")]
-    TonProof { proof: TonProofItemReply },
+    TonProofItemReplySuccess {
+        proof: TonProofItemReplySuccessData,
+    },
+    TonProofItemReplyError {
+        error: TonProofItemReplyErrorData,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-enum NETWORK {
+pub enum NETWORK {
     #[serde(rename = "-239")]
     MAINNET,
     #[serde(rename = "-3")]
@@ -92,29 +141,47 @@ enum NETWORK {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct TonProofItemReply {
-    timestamp: String,
-    domain: TonProofDomain,
-    signature: String,
-    payload: String,
+pub struct TonProofItemReplySuccessData {
+    /// 64-bit unix epoch time of the signing operation (seconds).
+    pub timestamp: String,
+    pub domain: TonProofDomain,
+    /// Base64-encoded signature.
+    pub signature: String,
+    /// Payload from the request.
+    pub payload: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct TonProofDomain {
+pub struct TonProofItemReplyErrorData {
+    /// | Code | Description                   |
+    /// |------|-------------------------------|
+    /// | 0    | Unknown error                 |
+    /// | 400  | Method is not supported       |
+    pub code: u32,
+    pub message: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TonProofDomain {
+    /// AppDomain length.
     #[serde(rename = "lengthBytes")]
-    length_bytes: u32,
-    value: String,
+    pub length_bytes: u32,
+    /// App domain name (as url part, without encoding).
+    pub value: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DeviceInfo {
     pub platform: Platform,
+    /// E.g. "Tonkeeper".
     #[serde(rename = "appName")]
     pub app_name: String,
+    /// E.g. "2.3.367".
     #[serde(rename = "appVersion")]
     pub app_version: String,
     #[serde(rename = "maxProtocolVersion")]
     pub max_protocol_version: u32,
+    /// List of supported features and methods in RPC.
     pub features: Vec<Feature>,
 }
 
