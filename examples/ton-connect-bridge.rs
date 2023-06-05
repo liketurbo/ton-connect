@@ -17,7 +17,12 @@ fn main() {
         manifest_url:
             "https://raw.githubusercontent.com/XaBbl4/pytonconnect/main/pytonconnect-manifest.json"
                 .to_string(),
-        items: vec![ConnectItem::TonAddressItem],
+        items: vec![
+            ConnectItem::TonAddressItem,
+            ConnectItem::TonProofItem {
+                payload: "halo".to_string(),
+            },
+        ],
     };
     let wallet_universal_url = "https://app.tonkeeper.com/ton-connect".to_string();
     let link = create_universal_link(
@@ -37,7 +42,7 @@ fn main() {
         let event = event.unwrap();
         if event.id.is_some() {
             let bridge_msg: BridgeMessage = serde_json::from_str(&event.data).unwrap();
-            let msg = &general_purpose::STANDARD_NO_PAD
+            let msg = &general_purpose::STANDARD
                 .decode(bridge_msg.message)
                 .expect("invalid base64 message from bridge");
             let (nonce, ciphertext) = msg.split_at(NONCE_LENGTH);
@@ -45,7 +50,7 @@ fn main() {
                 .decrypt_message(&ciphertext, &nonce, &bridge_msg.from)
                 .unwrap();
             let wallet_event: WalletEvent = serde_json::from_str(&plaintext).unwrap();
-            println!("Message from bridge: {:?}", wallet_event);
+            println!("{}", serde_json::to_string_pretty(&wallet_event).unwrap());
         }
     }
 }

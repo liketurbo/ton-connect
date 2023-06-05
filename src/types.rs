@@ -38,17 +38,6 @@ pub enum ConnectItem {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct TonAddressItem {
-    pub name: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct TonProofItem {
-    pub name: String,
-    pub payload: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 pub enum Topic {
     #[serde(rename = "sendTransaction")]
     SendTransaction,
@@ -143,12 +132,48 @@ pub enum NETWORK {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TonProofItemReplySuccessData {
     /// 64-bit unix epoch time of the signing operation (seconds).
-    pub timestamp: String,
+    #[serde(with = "timestamp")]
+    pub timestamp: timestamp::Timestamp,
     pub domain: TonProofDomain,
     /// Base64-encoded signature.
     pub signature: String,
     /// Payload from the request.
     pub payload: String,
+}
+
+mod timestamp {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    #[derive(Debug)]
+    pub enum Timestamp {
+        StringValue(String),
+        NumberValue(u64),
+    }
+
+    pub fn serialize<S>(value: &Timestamp, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match value {
+            Timestamp::StringValue(string_value) => serializer.serialize_str(string_value),
+            Timestamp::NumberValue(number_value) => serializer.serialize_u64(*number_value),
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Timestamp, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        serde_json::Value::deserialize(deserializer).and_then(|value| {
+            if let Some(string_value) = value.as_str() {
+                Ok(Timestamp::StringValue(string_value.to_owned()))
+            } else if let Some(number_value) = value.as_u64() {
+                Ok(Timestamp::NumberValue(number_value))
+            } else {
+                Err(serde::de::Error::custom("Invalid timestamp format"))
+            }
+        })
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
