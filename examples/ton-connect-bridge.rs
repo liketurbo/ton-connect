@@ -5,7 +5,7 @@ extern crate ton_connect;
 use eventsource::reqwest::Client;
 use reqwest::Url;
 use ton_connect::{
-    base64,
+    base64::{engine::general_purpose, Engine as _},
     crypto::{ClientKeypair, NONCE_LENGTH},
     helpers::{create_listen_url, create_universal_link},
     types::{BridgeMessage, ConnectItem, ConnectRequest, Topic, WalletEvent},
@@ -37,8 +37,9 @@ fn main() {
         let event = event.unwrap();
         if event.id.is_some() {
             let bridge_msg: BridgeMessage = serde_json::from_str(&event.data).unwrap();
-            let msg =
-                base64::decode(bridge_msg.message).expect("invalid base64 message from bridge");
+            let msg = &general_purpose::STANDARD_NO_PAD
+                .decode(bridge_msg.message)
+                .expect("invalid base64 message from bridge");
             let (nonce, ciphertext) = msg.split_at(NONCE_LENGTH);
             let plaintext = client_a
                 .decrypt_message(&ciphertext, &nonce, &bridge_msg.from)
