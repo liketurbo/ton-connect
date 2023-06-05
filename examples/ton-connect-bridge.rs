@@ -7,7 +7,7 @@ use reqwest::Url;
 use ton_connect::{
     base64,
     crypto::{ClientKeypair, NONCE_LENGTH},
-    helpers::{self, create_listen_url},
+    helpers::{create_listen_url, create_universal_link},
     types::{BridgeMessage, ConnectItem, ConnectRequest, Topic, WalletEvent},
 };
 
@@ -20,7 +20,7 @@ fn main() {
         items: vec![ConnectItem::TonAddressItem],
     };
     let wallet_universal_url = "https://app.tonkeeper.com/ton-connect".to_string();
-    let link = helpers::create_universal_link(
+    let link = create_universal_link(
         &wallet_universal_url,
         &client_a.get_hex_public(),
         &connect_request,

@@ -8,5 +8,4 @@ extern crate url;
 
 pub mod crypto;
 pub mod helpers;
-pub mod link;
 pub mod types;
