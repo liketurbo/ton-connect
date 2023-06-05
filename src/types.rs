@@ -1,4 +1,4 @@
-use serde::{ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 
 /// App needs to have its manifest to pass meta information to the wallet.
 #[derive(Debug, Serialize, Deserialize)]
@@ -132,7 +132,6 @@ pub enum NETWORK {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TonProofItemReplySuccessData {
     /// 64-bit unix epoch time of the signing operation (seconds).
-    #[serde(with = "timestamp")]
     pub timestamp: timestamp::Timestamp,
     pub domain: TonProofDomain,
     /// Base64-encoded signature.
@@ -142,7 +141,7 @@ pub struct TonProofItemReplySuccessData {
 }
 
 mod timestamp {
-    use serde::{Deserialize, Deserializer, Serializer};
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
     #[derive(Debug)]
     pub enum Timestamp {
@@ -150,29 +149,33 @@ mod timestamp {
         NumberValue(u64),
     }
 
-    pub fn serialize<S>(value: &Timestamp, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        match value {
-            Timestamp::StringValue(string_value) => serializer.serialize_str(string_value),
-            Timestamp::NumberValue(number_value) => serializer.serialize_u64(*number_value),
+    impl Serialize for Timestamp {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            match self {
+                Timestamp::StringValue(string_value) => serializer.serialize_str(string_value),
+                Timestamp::NumberValue(number_value) => serializer.serialize_u64(*number_value),
+            }
         }
     }
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Timestamp, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        serde_json::Value::deserialize(deserializer).and_then(|value| {
-            if let Some(string_value) = value.as_str() {
-                Ok(Timestamp::StringValue(string_value.to_owned()))
-            } else if let Some(number_value) = value.as_u64() {
-                Ok(Timestamp::NumberValue(number_value))
-            } else {
-                Err(serde::de::Error::custom("Invalid timestamp format"))
-            }
-        })
+    impl<'de> Deserialize<'de> for Timestamp {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            serde_json::Value::deserialize(deserializer).and_then(|value| {
+                if let Some(string_value) = value.as_str() {
+                    Ok(Timestamp::StringValue(string_value.to_owned()))
+                } else if let Some(number_value) = value.as_u64() {
+                    Ok(Timestamp::NumberValue(number_value))
+                } else {
+                    Err(serde::de::Error::custom("Invalid timestamp format"))
+                }
+            })
+        }
     }
 }
 
@@ -207,112 +210,116 @@ pub struct DeviceInfo {
     #[serde(rename = "maxProtocolVersion")]
     pub max_protocol_version: u32,
     /// List of supported features and methods in RPC.
-    pub features: Vec<Feature>,
+    pub features: Vec<feature::Feature>,
 }
 
-#[derive(Debug)]
-pub enum Feature {
-    SendTransactionDeprecated,
-    SendTransaction { max_messages: u32 },
-    SignData,
-}
+mod feature {
+    use serde::{ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
 
-impl Serialize for Feature {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        match self {
-            Feature::SignData => {
-                let mut sign_data = serializer.serialize_struct("SignData", 1)?;
-                sign_data.serialize_field("name", "SignData")?;
-                sign_data.end()
+    #[derive(Debug)]
+    pub enum Feature {
+        SendTransactionDeprecated,
+        SendTransaction { max_messages: u32 },
+        SignData,
+    }
+
+    impl Serialize for Feature {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            match self {
+                Feature::SignData => {
+                    let mut sign_data = serializer.serialize_struct("SignData", 1)?;
+                    sign_data.serialize_field("name", "SignData")?;
+                    sign_data.end()
+                }
+                Feature::SendTransaction { max_messages } => {
+                    let mut sign_transaction = serializer.serialize_struct("SendTransaction", 2)?;
+                    sign_transaction.serialize_field("name", "SendTransaction")?;
+                    sign_transaction.serialize_field("maxMessages", max_messages)?;
+                    sign_transaction.end()
+                }
+                Feature::SendTransactionDeprecated => serializer.serialize_str("SendTransaction"),
             }
-            Feature::SendTransaction { max_messages } => {
-                let mut sign_transaction = serializer.serialize_struct("SendTransaction", 2)?;
-                sign_transaction.serialize_field("name", "SendTransaction")?;
-                sign_transaction.serialize_field("maxMessages", max_messages)?;
-                sign_transaction.end()
-            }
-            Feature::SendTransactionDeprecated => serializer.serialize_str("SendTransaction"),
         }
     }
-}
 
-impl<'de> Deserialize<'de> for Feature {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        use serde::de::{self, MapAccess, Visitor};
+    impl<'de> Deserialize<'de> for Feature {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            use serde::de::{self, MapAccess, Visitor};
 
-        struct FeatureVisitor;
+            struct FeatureVisitor;
 
-        impl<'de> Visitor<'de> for FeatureVisitor {
-            type Value = Feature;
+            impl<'de> Visitor<'de> for FeatureVisitor {
+                type Value = Feature;
 
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("a valid Feature representation")
-            }
-
-            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                if value == "SendTransaction" {
-                    Ok(Feature::SendTransactionDeprecated)
-                } else {
-                    Err(de::Error::unknown_variant(value, &["SendTransaction"]))
+                fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    formatter.write_str("a valid Feature representation")
                 }
-            }
 
-            fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
-            where
-                M: MapAccess<'de>,
-            {
-                let mut name: Option<String> = None;
-                let mut max_messages: Option<u32> = None;
-                let mut encountered_name_field = false;
+                fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+                where
+                    E: de::Error,
+                {
+                    if value == "SendTransaction" {
+                        Ok(Feature::SendTransactionDeprecated)
+                    } else {
+                        Err(de::Error::unknown_variant(value, &["SendTransaction"]))
+                    }
+                }
 
-                while let Some(key) = map.next_key()? {
-                    match key {
-                        "name" => {
-                            if encountered_name_field {
-                                return Err(de::Error::duplicate_field("name"));
+                fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
+                where
+                    M: MapAccess<'de>,
+                {
+                    let mut name: Option<String> = None;
+                    let mut max_messages: Option<u32> = None;
+                    let mut encountered_name_field = false;
+
+                    while let Some(key) = map.next_key()? {
+                        match key {
+                            "name" => {
+                                if encountered_name_field {
+                                    return Err(de::Error::duplicate_field("name"));
+                                }
+                                encountered_name_field = true;
+                                name = Some(map.next_value()?);
                             }
-                            encountered_name_field = true;
-                            name = Some(map.next_value()?);
-                        }
-                        "maxMessages" => {
-                            max_messages = Some(map.next_value()?);
-                        }
-                        _ => {
-                            // Ignore unknown fields
-                            let _: de::IgnoredAny = map.next_value()?;
+                            "maxMessages" => {
+                                max_messages = Some(map.next_value()?);
+                            }
+                            _ => {
+                                // Ignore unknown fields
+                                let _: de::IgnoredAny = map.next_value()?;
+                            }
                         }
                     }
-                }
 
-                if !encountered_name_field {
-                    return Err(de::Error::missing_field("name"));
-                }
-
-                match name.as_deref() {
-                    Some("SendTransaction") => {
-                        let max_messages =
-                            max_messages.ok_or_else(|| de::Error::missing_field("maxMessages"))?;
-                        Ok(Feature::SendTransaction { max_messages })
+                    if !encountered_name_field {
+                        return Err(de::Error::missing_field("name"));
                     }
-                    Some("SignData") => Ok(Feature::SignData),
-                    _ => Err(de::Error::unknown_variant(
-                        &name.unwrap(),
-                        &["SendTransaction", "SignData"],
-                    )),
+
+                    match name.as_deref() {
+                        Some("SendTransaction") => {
+                            let max_messages = max_messages
+                                .ok_or_else(|| de::Error::missing_field("maxMessages"))?;
+                            Ok(Feature::SendTransaction { max_messages })
+                        }
+                        Some("SignData") => Ok(Feature::SignData),
+                        _ => Err(de::Error::unknown_variant(
+                            &name.unwrap(),
+                            &["SendTransaction", "SignData"],
+                        )),
+                    }
                 }
             }
-        }
 
-        deserializer.deserialize_any(FeatureVisitor)
+            deserializer.deserialize_any(FeatureVisitor)
+        }
     }
 }
 
@@ -366,6 +373,8 @@ mod tests {
 
     #[test]
     fn test_custom_serde() {
+        use super::feature::Feature;
+
         let device_info_1 = DeviceInfo {
             platform: Platform::IPhone,
             app_name: "Cool App".to_owned(),
