@@ -6,13 +6,13 @@ use eventsource::reqwest::Client;
 use reqwest::Url;
 use ton_connect::{
     base64::{engine::general_purpose, Engine as _},
-    crypto::{ClientKeypair, NONCE_LENGTH},
+    crypto::{decrypt_message, ClientKeypair, NONCE_LENGTH},
     helpers::{create_listen_url, create_universal_link},
     types::{BridgeMessage, ConnectItem, ConnectRequest, Topic, WalletEvent},
 };
 
 fn main() {
-    let client_a = ClientKeypair::generate_random_keypair();
+    let client_a = ClientKeypair::generate_random();
     let connect_request = ConnectRequest {
         manifest_url:
             "https://raw.githubusercontent.com/XaBbl4/pytonconnect/main/pytonconnect-manifest.json"
@@ -46,9 +46,8 @@ fn main() {
                 .decode(bridge_msg.message)
                 .expect("invalid base64 message from bridge");
             let (nonce, ciphertext) = msg.split_at(NONCE_LENGTH);
-            let plaintext = client_a
-                .decrypt_message(&ciphertext, &nonce, &bridge_msg.from)
-                .unwrap();
+            let plaintext =
+                decrypt_message(&client_a.secret, &ciphertext, &nonce, &bridge_msg.from).unwrap();
             let wallet_event: WalletEvent = serde_json::from_str(&plaintext).unwrap();
             println!("{}", serde_json::to_string_pretty(&wallet_event).unwrap());
         }

@@ -26,16 +26,6 @@ use url::Url;
 /// let universal_link = create_universal_link(&wallet_universal_url, &client_id, &connect_request).unwrap();
 /// println!("Universal link: {}", universal_link);
 /// ```
-///
-/// # Arguments
-///
-/// * `wallet_universal_url` - The wallet universal URL.
-/// * `client_id` - The client public key encoded as hex.
-/// * `connect_request` - The ConnectRequest containing the manifest URL and items.
-///
-/// # Returns
-///
-/// A Result containing the generated universal link as a `Url` instance, or an error if the serialization fails.
 pub fn create_universal_link(
     wallet_universal_url: &str,
     client_id: &str,
@@ -68,16 +58,6 @@ pub fn create_universal_link(
 /// let url = create_listen_url(&bridge_url, &clients_ids, &topics).unwrap();
 /// println!("Listen URL: {}", url);
 /// ```
-///
-/// # Arguments
-///
-/// * `bridge_url` - The bridge URL.
-/// * `clients_ids` - A slice of client public keys encoded as hex.
-/// * `topics` - An optional slice of topics to subscribe to.
-///
-/// # Returns
-///
-/// A Result containing the generated listen URL as a `Url` instance, or an error if the URL parsing fails.
 pub fn create_listen_url(
     bridge_url: &str,
     clients_ids: &Vec<String>,
